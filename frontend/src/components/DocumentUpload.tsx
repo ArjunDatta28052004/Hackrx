@@ -21,7 +21,10 @@ export function DocumentUpload({ onUploadComplete }: DocumentUploadProps) {
     const file = files[0];
     
     // Validate file type
-    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const allowedTypes = [
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ];
     if (!allowedTypes.includes(file.type)) {
       toast.error("Only PDF and DOCX files are supported");
       return;
@@ -36,7 +39,7 @@ export function DocumentUpload({ onUploadComplete }: DocumentUploadProps) {
     setIsUploading(true);
 
     try {
-      // Get upload URL
+      // Get upload URL from Convex
       const uploadUrl = await generateUploadUrl();
 
       // Upload file
@@ -52,14 +55,37 @@ export function DocumentUpload({ onUploadComplete }: DocumentUploadProps) {
 
       const { storageId } = await response.json();
 
-      // Save document metadata
-      const fileType = file.type === 'application/pdf' ? 'pdf' : 'docx';
+      // Save document metadata in Convex
+      const fileType = file.type === "application/pdf" ? "pdf" : "docx";
       await saveDocument({
         fileName: file.name,
         fileType,
         fileSize: file.size,
         storageId,
       });
+
+      // ✅ Call Python backend on Render after upload is saved
+      try {
+        const pyRes = await fetch(
+          "https://my-python-backend.onrender.com/run-script",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              name: file.name, // You can pass filename or other metadata
+              size: file.size
+            })
+          }
+        );
+        const pyData = await pyRes.json();
+        console.log("Python backend response:", pyData);
+        toast.success(`Backend processed: ${pyData.message}`);
+      } catch (err) {
+        console.error("Python backend error:", err);
+        toast.error("File uploaded, but backend processing failed");
+      }
 
       toast.success("Document uploaded successfully! Processing will begin shortly.");
       onUploadComplete();
